@@ -48,21 +48,21 @@ if __name__ == '__main__':
         le.fit(col)
         new_cat_features.append(list(le.transform(col)))
     new_cat_features = np.array(new_cat_features).transpose()
-    imp = Imputer(missing_values='NaN', strategy=args.fill_in, axis=0)
+    imp = Imputer(missing_values='NaN', strategy=args.fill_in, axis=1)
     imp.fit(numerical_features)
     numerical_features_filled_in = imp.transform(numerical_features)
     print "Missing numerical values filled in"
 
-    enc = OneHotEncoder()
-    enc.fit(new_cat_features)
-    categorical_transformed = enc.transform(new_cat_features).toarray()
+    #enc = OneHotEncoder()
+    #enc.fit(new_cat_features)
+    #categorical_transformed = enc.transform(new_cat_features).toarray()
     # Note: Using OneHotEncoder absolutely explodes the number of columns and
     # thus the data size. Will likely need to find a different approach.
     print "Categorical features encoded"
 
-    print "Numerical shape is: " + str(new_cat_features.shape)
-    print "Categorical shape is: " + str(categorical_transformed.shape)
-    all_features = np.concatenate((new_cat_features, categorical_transformed), axis=1)
+    print "Numerical shape is: " + str(numerical_features_filled_in.shape)
+    print "Categorical shape is: " + str(new_cat_features.shape)
+    all_features = np.concatenate((numerical_features_filled_in, new_cat_features), axis=1)
     num_features = all_features.shape[1]
     print "There are: " + str(num_features) + " features"
 

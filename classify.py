@@ -173,6 +173,9 @@ def main(args):
     voting_methods = ['none', 'hard', 'soft']
     assert args.vote in voting_methods, "--vote must be one of 'none', 'hard', 'soft'"
     out_file_name = "results.log"
+    labels_file = open(args.label_file)
+    labels = [int(x.strip()) for x in labels_file.readlines()]
+    labels_file.close()
 
     if args.classify:
         # Store column names as features, except ORF and Essential
@@ -181,8 +184,6 @@ def main(args):
         # Cast to list to keep it all in memory
         train = list(DictReader(open(args.train_file, 'r')))
         test = list(DictReader(open(args.test_file, 'r')))
-
-        labels = []
 
         train_features = []
         for example in train:
@@ -227,20 +228,23 @@ def main(args):
 
     elif args.cross_validate:
 
-        # Store column names as features, except ORF and Essential
         all_features = DictReader(open(args.data_file, 'rU')).fieldnames
         # Cast to list to keep it all in memory
-        data = list(DictReader(open(args.data_file, 'rU')))
 
-        labels = []
-        train_features = []
-        for example in data:
-            train_feat = []
-            for feature in args.features:
-                train_feat.append(example[feature])
-            train_features.append(train_feat)
-        x_train = np.array(train_features, dtype=float)
-        X_train, X_test, y_train, y_test = cross_validation.train_test_split (x_train, labels, test_size=0.1)
+        examples = []
+        if args.features is not None:
+            file_data = list(DictReader(open(args.data_file, 'rU')))
+            for example in file_data:
+                train_feat = []
+                for feature in args.features:
+                    train_feat.append(example[feature])
+                examples.append(train_feat)
+        else:
+            with open(args.data_file) as data_file:
+                # Read in all lines except the header
+                examples = [x.split(",") for x in data_file.readlines()[1:]]
+        x_train = np.array(examples, dtype=float)
+        X_train, X_test, y_train, y_test = cross_validation.train_test_split (examples, labels, test_size=0.1)
 
         if args.scale:
             scaler = StandardScaler().fit(X_train)
@@ -314,6 +318,9 @@ if __name__ == '__main__':
     argparser.add_argument("--test_file", help="Name of test file",
                            type=str, default="../Data/orange_small_test.data",
                            required=False)
+    argparser.add_argument("--label_file", help="Name of test file",
+                           type=str, default="../Data/orange_small_train_churn.labels",
+                           required=False)
     argparser.add_argument("--classify", help="Classify using training and test set",
                            action="store_true")
     argparser.add_argument("--classifiers", help="A list of classifiers to use",
@@ -332,7 +339,7 @@ if __name__ == '__main__':
     argparser.add_argument("--write_to_log", help="Send output to log file",
                            action="store_true")
     argparser.add_argument("--features", help="Features to be used",
-                           nargs='+', required=True)
+                           nargs='+', required=False)
     argparser.add_argument("--scale", help="Scale the data with StandardScale",
                            action="store_true")
     argparser.add_argument("--write_predictions", help="Write the predictions to a file",
