@@ -60,8 +60,7 @@ class ClassifyArgs(object):
         return "_".join([str(x) for x in str_list])
 
 def write_log(out_file_name, args, classifier, precision, recall,
-              true_count, actual_count, X_train, X_test, all_features,
-              predict_hash):
+              true_count, actual_count, X_train, X_test, predict_hash):
     """
     Function to write results of a run to a file.
     """
@@ -72,9 +71,6 @@ def write_log(out_file_name, args, classifier, precision, recall,
     log = [predict_hash, args.data_file, args.train_file, args.test_file,
            classifier, get_kernel(classifier), args.scale, len(X_train),
            len(X_test), precision, recall, true_count, actual_count]
-    # Include a TRUE/FALSE column for each feature
-    log += [feature in args.features for feature in all_features]
-
     with open(out_file_name, 'a') as f:
         out_writer = csv.writer(f, lineterminator='\n')
         out_writer.writerow(log)
@@ -99,10 +95,10 @@ def svm_classify(train_X, train_Y, test_X, test_Y, kernel, reg):
     return clf
 
 def __print_and_log_results(clf, classifier, x_train, x_test, y_test, out_file_name,
-                            all_features, args):
+                            args):
     predictions = clf.predict(x_test)
-    precision = precision_score(y_test, predictions, [0, 1])
-    recall = recall_score(y_test, predictions, [0, 1])
+    precision = precision_score(y_test, predictions, [-1, 1])
+    recall = recall_score(y_test, predictions, [-1, 1])
     auc_score = roc_auc_score(y_test, predictions, None)
     print "Train/test set sizes: " + str(len(x_train)) + "/" + str(len(x_test))
     print "Precision is: " + str(precision)
@@ -121,7 +117,7 @@ def __print_and_log_results(clf, classifier, x_train, x_test, y_test, out_file_n
         write_log(out_file_name=out_file_name, args=args, classifier=classifier,
                     precision=precision, recall=recall,
                     true_count=true_count, actual_count=actual_count,
-                    X_train=x_train, X_test=x_test, all_features=all_features,
+                    X_train=x_train, X_test=x_test,
                     predict_hash=predict_hash)
     if args.write_predictions:
         __write_predictions(predict_hash, predictions, y_test)
@@ -173,37 +169,23 @@ def main(args):
     voting_methods = ['none', 'hard', 'soft']
     assert args.vote in voting_methods, "--vote must be one of 'none', 'hard', 'soft'"
     out_file_name = "results.log"
-    labels_file = open(args.label_file)
-    labels = [int(x.strip()) for x in labels_file.readlines()]
-    labels_file.close()
 
     if args.classify:
-        # Store column names as features, except ORF and Essential
-        all_features = DictReader(open(args.train_file, 'r')).fieldnames
-
         # Cast to list to keep it all in memory
-        train = list(DictReader(open(args.train_file, 'r')))
-        test = list(DictReader(open(args.test_file, 'r')))
+        train = list(csv.reader(open(args.train_file, 'r')))
+        test = list(csv.reader(open(args.test_file, 'r')))
 
-        train_features = []
-        for example in train:
-            train_feat = []
-            for feature in args.features:
-                train_feat.append(example[feature])
-            train_features.append(train_feat)
-        x_train = np.array(train_features, dtype=float)
+        x_train = np.array(train[1:], dtype=float)
         
-        test_features = []
-        for example in test:
-            test_feature = []
-            for feature in args.features:
-                test_feature.append(example[feature])
-            test_features.append(test_feature)
-        x_test = np.array(test_features, dtype=float)
+        x_test = np.array(test[1:], dtype=float)
+        
+        train_labels_file = open(args.train_labels)
+        y_train = np.array([int(x.strip()) for x in train_labels_file.readlines()])
 
-        y_train = np.array()
-
-        y_test = np.array()
+        test_labels_file = open(args.test_labels)
+        y_test = np.array([int(x.strip()) for x in test_labels_file.readlines()])
+        train_labels_file.close()
+        test_labels_file.close()
 
         if args.scale:
             scaler = StandardScaler()
@@ -216,7 +198,7 @@ def main(args):
                 clf = model.fit(x_train, y_train)
                 print "Using classifier " + classifier
                 __print_and_log_results(clf, classifier, x_train, x_test, y_test,
-                                        out_file_name, all_features, args)
+                                        out_file_name, args)
         else:
             model = __get_classifier_model('none', args)
             clf = model.fit(x_train, y_train)
@@ -224,13 +206,13 @@ def main(args):
             classifier = "vote-" + args.vote + "-with-classifiers_"
             classifier += "_".join(args.classifiers)
             __print_and_log_results(clf, classifier, x_train, x_test, y_test,
-                                    out_file_name, all_features, args)
+                                    out_file_name, args)
 
     elif args.cross_validate:
-
-        all_features = DictReader(open(args.data_file, 'rU')).fieldnames
         # Cast to list to keep it all in memory
-
+        labels_file = open(args.labels)
+        labels = [int(x.strip()) for x in labels_file.readlines()]
+        labels_file.close()
         examples = []
         if args.features is not None:
             file_data = list(DictReader(open(args.data_file, 'rU')))
@@ -242,7 +224,7 @@ def main(args):
         else:
             with open(args.data_file) as data_file:
                 # Read in all lines except the header
-                examples = [x.split(",") for x in data_file.readlines()[1:]]
+                examples = list(csv.reader(data_file))[1:]
         x_train = np.array(examples, dtype=float)
         X_train, X_test, y_train, y_test = cross_validation.train_test_split (examples, labels, test_size=0.1)
 
@@ -256,7 +238,7 @@ def main(args):
                 clf = model.fit(X_train, y_train)
                 print "Using classifier " + classifier
                 __print_and_log_results(clf, classifier, X_train, X_test, y_test,
-                                        out_file_name, all_features, args)
+                                        out_file_name, args)
         else:
             model = __get_classifier_model('none', args)
             clf = model.fit(X_train, y_train)
@@ -264,12 +246,9 @@ def main(args):
             classifier = "vote-" + args.vote + "-with-classifiers_"
             classifier += "_".join(args.classifiers)
             __print_and_log_results(clf, classifier, X_train, X_test, y_test, out_file_name,
-                                    all_features, args)
+                                    args)
     elif args.kfold:
         # Store column names as features, except ORF and Essential
-        all_features = DictReader(open(args.data_file, 'rU')).fieldnames
-        all_features.remove('ORF')
-        all_features.remove('Essential')
         # Cast to list to keep it all in memory
         data = list(DictReader(open(args.data_file, 'rU')))
 
@@ -296,7 +275,7 @@ def main(args):
                     clf = model.fit(X_train, y_train)
                     print "Using classifier " + classifier
                     __print_and_log_results(clf, classifier, X_train, X_test, y_test,
-                                            out_file_name, all_features, args)
+                                            out_file_name, args)
             else:
                 model = __get_classifier_model('none', args)
                 clf = model.fit(X_train, y_train)
@@ -304,7 +283,7 @@ def main(args):
                 classifier = "vote-" + args.vote + "-with-classifiers_"
                 classifier += "_".join(args.classifiers)
                 __print_and_log_results(clf, classifier, X_train, X_test, y_test, out_file_name,
-                                        all_features, args)
+                                        args)
         print "kfold loop done"
 
 if __name__ == '__main__':
@@ -318,7 +297,13 @@ if __name__ == '__main__':
     argparser.add_argument("--test_file", help="Name of test file",
                            type=str, default="../Data/orange_small_test.data",
                            required=False)
-    argparser.add_argument("--label_file", help="Name of test file",
+    argparser.add_argument("--labels", help="Name of labels file",
+                           type=str, default="../Data/orange_small_train_churn.labels",
+                           required=False)
+    argparser.add_argument("--test_labels", help="Name of test labels file",
+                           type=str, default="../Data/orange_small_train_churn.labels",
+                           required=False)
+    argparser.add_argument("--train_labels", help="Name of train labels file",
                            type=str, default="../Data/orange_small_train_churn.labels",
                            required=False)
     argparser.add_argument("--classify", help="Classify using training and test set",
