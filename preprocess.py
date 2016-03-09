@@ -96,7 +96,6 @@ def __pandas_preprocess(data_file_name, categorical_index, num_features,
     numerical_columns = ["Var" + str(i) for i in range(1, categorical_index + 1, 1)]
     categorical_columns = ["Var" + str(i) for i in range(categorical_index, num_features + 1, 1)]
     remove = []
-    print data.info()
     count = data.count(axis=0)
     print "Removing extraneous columns"
     for col in data.columns:
@@ -109,19 +108,35 @@ def __pandas_preprocess(data_file_name, categorical_index, num_features,
             remove.append(col)
     remove = set(remove)
     data.drop(remove, axis=1, inplace=True)
-    print data.info()
+  
+    numerical_features = pd.DataFrame()
+    for numerical_column in numerical_columns:
+        if numerical_column in data:
+            feature = data[numerical_column]
+            print "Filling in missing values for: " + numerical_column  
+            feature.fillna(data[numerical_column].mean(), inplace=True)
+            pd.concat([numerical_features, feature], axis=1)
+            data.drop(numerical_column, axis=1, inplace=True)
     cat_features = pd.DataFrame()
     print "Transforming categorical data"
-    # Note: Currently, the get_dummies approach is exploding the RAM usage to the
-    # point that the app is eventually killed
     for column in categorical_columns:
         if column in data:
             print "Transforming column: " + column
-            feature_transformed = pd.get_dummies(data[column], dummy_na=True,
+            feature = data[column]
+            counts = feature.value_counts()
+            # Following procedure used by winning KDD Cup 2009 team and only
+            # keeping the top 10 categorical features
+            if len(counts) > 10:
+                least_used_counts = feature.value_counts()[10:]
+                least_used = [x[0] for x in least_used_counts.iteritems()]
+                feature.replace(to_replace=least_used, value="other", inplace=True)
+            feature_transformed = pd.get_dummies(feature, dummy_na=True,
                                                  prefix=column)
-            cat_features = pd.concat([cat_features, feature_transformed])
-    data.drop(categorical_columns, axis=1, inplace=True)
-    data = pd.concat([data, cat_features])
+            cat_features = pd.concat([cat_features, feature_transformed], axis=1)
+            data.drop(column, axis=1, inplace=True)
+    data = pd.concat([numerical_features, cat_features], axis=1)
+    print "Preprocessed DataFrame info: "
+    print data.info()
     dir_name = os.path.dirname(data_file_name)
     print "Writing file: " + dir_name + "/" + processed_file_name
     data.to_csv(dir_name + "/" + processed_file_name)

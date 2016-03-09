@@ -16,11 +16,13 @@ from sklearn.ensemble import AdaBoostClassifier
 from sklearn.ensemble import VotingClassifier
 from sklearn.metrics import precision_score, recall_score, roc_auc_score
 from sklearn.cross_validation import KFold
+from sklearn.ensemble.forest import RandomForestClassifier
 
 # Constants for classifier names
 LOG_REG = 'log_reg'
 SVM = 'svm'
 ADA_BOOST = 'ada_boost'
+RF = "random_forest"
 
 class ClassifyArgs(object):
     """
@@ -60,7 +62,7 @@ class ClassifyArgs(object):
         return "_".join([str(x) for x in str_list])
 
 def write_log(out_file_name, args, classifier, precision, recall,
-              true_count, actual_count, X_train, X_test, predict_hash):
+              true_count, actual_count, X_train, X_test, predict_hash, auc):
     """
     Function to write results of a run to a file.
     """
@@ -70,7 +72,7 @@ def write_log(out_file_name, args, classifier, precision, recall,
     # Log important info
     log = [predict_hash, args.data_file, args.train_file, args.test_file,
            classifier, get_kernel(classifier), args.scale, len(X_train),
-           len(X_test), precision, recall, true_count, actual_count]
+           len(X_test), precision, recall, true_count, actual_count, auc]
     with open(out_file_name, 'a') as f:
         out_writer = csv.writer(f, lineterminator='\n')
         out_writer.writerow(log)
@@ -118,7 +120,7 @@ def __print_and_log_results(clf, classifier, x_train, x_test, y_test, out_file_n
                     precision=precision, recall=recall,
                     true_count=true_count, actual_count=actual_count,
                     X_train=x_train, X_test=x_test,
-                    predict_hash=predict_hash)
+                    predict_hash=predict_hash, auc=auc_score)
     if args.write_predictions:
         __write_predictions(predict_hash, predictions, y_test)
 
@@ -160,6 +162,8 @@ def __get_classifier_model(classifier, args):
                 clfs.append((clf, SVC(kernel=args.kernel)))
             elif clf == ADA_BOOST:
                 clfs.append((clf, AdaBoostClassifier()))
+            elif clf == RF:
+                clfs.append((clf, RandomForestClassifier()))
         model = VotingClassifier(estimators=clfs, voting=args.vote)
 
     return model
