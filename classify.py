@@ -234,9 +234,11 @@ def main(args):
             X_test = scaler.transform(X_test)
         if args.vote == 'none':
             for classifier in args.classifiers:
-                model = __get_classifier_model(classifier, args)
-                clf = model.fit(X_train, y_train)
                 print "Using classifier " + classifier
+                model = __get_classifier_model(classifier, args)
+                print "Fitting model"
+                clf = model.fit(X_train, y_train)
+                print "Evaluating results"
                 __print_and_log_results(clf, classifier, X_train, X_test, y_test,
                                         out_file_name, args)
         else:
@@ -271,9 +273,11 @@ def main(args):
                 X_test = scaler.transform(X_test)
             if args.vote == 'none':
                 for classifier in args.classifiers:
-                    model = __get_classifier_model(classifier, args)
-                    clf = model.fit(X_train, y_train)
                     print "Using classifier " + classifier
+                    model = __get_classifier_model(classifier, args)
+                    print "Fitting model"
+                    clf = model.fit(X_train, y_train)
+                    print "Evaluating results"
                     __print_and_log_results(clf, classifier, X_train, X_test, y_test,
                                             out_file_name, args)
             else:
