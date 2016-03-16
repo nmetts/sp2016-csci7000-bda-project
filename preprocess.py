@@ -115,7 +115,7 @@ def __pandas_preprocess(data_file_name, categorical_index, num_features,
             feature = data[numerical_column]
             print "Filling in missing values for: " + numerical_column  
             feature.fillna(data[numerical_column].mean(), inplace=True)
-            pd.concat([numerical_features, feature], axis=1)
+            numerical_features = pd.concat([numerical_features, feature], axis=1)
             data.drop(numerical_column, axis=1, inplace=True)
     cat_features = pd.DataFrame()
     print "Transforming categorical data"
@@ -139,7 +139,7 @@ def __pandas_preprocess(data_file_name, categorical_index, num_features,
     print data.info()
     dir_name = os.path.dirname(data_file_name)
     print "Writing file: " + dir_name + "/" + processed_file_name
-    data.to_csv(dir_name + "/" + processed_file_name)
+    data.to_csv(dir_name + "/" + processed_file_name, index=False)
 
 if __name__ == '__main__':
     argparser = argparse.ArgumentParser()
