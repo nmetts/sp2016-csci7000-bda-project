@@ -6,6 +6,7 @@ import argparse
 import csv
 import numpy as np
 import os
+import smote
 
 def restricted_float(x):
     x = float(x)
@@ -13,7 +14,8 @@ def restricted_float(x):
         raise argparse.ArgumentTypeError("%r not in range [0.0, 0.5]"%(x,))
     return x
 
-def __create_train_and_test_files(data_file_name, test_perc, labels_file, file_prefix):
+def __create_train_and_test_files(data_file_name, test_perc, labels_file,
+                                  file_prefix):
     """
     A function to create train and test files and their corresponding label files.
 
@@ -38,18 +40,19 @@ def __create_train_and_test_files(data_file_name, test_perc, labels_file, file_p
     test_size = int(test_perc * len(examples))
     test_indices = np.random.choice(range(len(examples)), test_size, replace=False)
     test_examples = [examples[x] for x in test_indices]
-
+    test_labels = [labels[x] for x in test_indices]
+    train_examples = [x for ind, x in enumerate(examples) if ind not in test_indices]
+    train_labels = [x for ind, x in enumerate(labels) if ind not in test_indices]
     # Write the train examples and labels
     print "Writing train file and train labels"
-    with open(file_prefix + ".train", 'w') as train_file, open(file_prefix + ".train.labels", 'w') as train_labels:
+    with open(file_prefix + ".train", 'w') as train_file, \
+        open(file_prefix + ".train.labels", 'w') as train_labels_file:
         train_writer = csv.writer(train_file)
         train_writer.writerow(header)
-        for i in range(len(examples)):
-            if i in test_indices:
-                pass
-            else:
-                train_writer.writerow(examples[i])
-                train_labels.write(str(labels[i]) + "\n")
+        for example in train_examples:
+            train_writer.writerow(example)
+        for label in train_labels:
+            train_labels_file.write(str(label) + "\n")
 
     # Write the test examples
     print "Writing test file"
@@ -61,9 +64,9 @@ def __create_train_and_test_files(data_file_name, test_perc, labels_file, file_p
 
     # Write the test labels
     print "Writing test labels"
-    with open(file_prefix + ".test.labels", 'w') as test_labels:
-        for index in test_indices:
-            test_labels.write(str(labels[index]) + "\n")
+    with open(file_prefix + ".test.labels", 'w') as test_labels_file:
+        for label in test_labels:
+            test_labels_file.write(str(label) + "\n")
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
@@ -73,10 +76,11 @@ if __name__ == "__main__":
     argparser.add_argument("--labels_file", help="Name of test file",
                            type=str, default="../Data/orange_small_train_churn.labels",
                            required=False)
-    argparser.add_argument("--test_perc", help="Name of data file",
+    argparser.add_argument("--test_perc", help="Percentage of test examples",
                            type=restricted_float, default=0.1, required=False)
     argparser.add_argument("--file_name", help="Name of data file",
                            type=str, required=True)
     args = argparser.parse_args()
-    __create_train_and_test_files(args.data_file, args.test_perc, args.labels_file, args.file_name)
+    __create_train_and_test_files(args.data_file, args.test_perc,
+                                  args.labels_file, args.file_name)
     

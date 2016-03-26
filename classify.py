@@ -18,11 +18,26 @@ from sklearn.metrics import precision_score, recall_score, roc_auc_score
 from sklearn.cross_validation import KFold
 from sklearn.ensemble.forest import RandomForestClassifier
 
+from unbalanced_dataset.unbalanced_dataset import UnbalancedDataset
+
+from unbalanced_dataset.over_sampling import OverSampler
+from unbalanced_dataset.over_sampling import SMOTE
+from unbalanced_dataset.pipeline import SMOTEENN
+from unbalanced_dataset.pipeline import SMOTETomek
+
 # Constants for classifier names
 LOG_REG = 'log_reg'
 SVM = 'svm'
 ADA_BOOST = 'ada_boost'
 RF = "random_forest"
+
+# Constants for sampling techniques
+SMOTE_REG = "smote"
+SMOTE_SVM = "smote_svm"
+SMOTE_BORDERLINE_1 = "smote_borderline_1"
+SMOTE_BORDERLINE_2 = "smote_borderline_2"
+SMOTE_ENN = "smote_enn"
+SMOTE_TOMEK = "smote_tomek"
 
 class ClassifyArgs(object):
     """
@@ -72,7 +87,8 @@ def write_log(out_file_name, args, classifier, precision, recall,
     # Log important info
     log = [predict_hash, args.data_file, args.train_file, args.test_file,
            classifier, get_kernel(classifier), args.scale, len(X_train),
-           len(X_test), precision, recall, true_count, actual_count, auc]
+           len(X_test), precision, recall, true_count, actual_count, auc,
+           args.sampling_technique, args.sampling_ratio]
     with open(out_file_name, 'a') as f:
         out_writer = csv.writer(f, lineterminator='\n')
         out_writer.writerow(log)
@@ -130,6 +146,29 @@ def __write_predictions(predict_hash, predictions, actuals):
         for prediction, actual in zip(predictions, actuals):
             predict_writer.writerow([predict_hash, prediction, actual])
 
+def __get_sample_transformed_examples(sample_type, train_x, train_y, ratio):
+    sampler = None
+    verbose = True
+    if sample_type == SMOTE_REG:
+        sampler = SMOTE(kind='regular', verbose=verbose, ratio=4)
+    elif sample_type == SMOTE_SVM:
+        # TODO: Make this configurable?
+        svm_args = {'class_weight' : 'auto'}
+        sampler = SMOTE(kind='svm', ratio=ratio, verbose=verbose, **svm_args)
+    elif sample_type == SMOTE_BORDERLINE_1:
+        sampler = SMOTE(kind='borderline1', ratio=ratio, verbose=verbose)
+    elif sample_type == SMOTE_BORDERLINE_2:
+        sampler = SMOTE(kind='borderline2', ratio=ratio, verbose=verbose)
+    elif sample_type == SMOTE_ENN:
+        sampler = SMOTEENN(ratio=ratio, verbose=verbose)
+    elif sample_type == SMOTE_TOMEK:
+        sampler = SMOTETomek(ratio=ratio,verbose=verbose)
+    else:
+        print "Unrecoqnized sample technique: " + sample_type
+        print "Returning original data"
+        return train_x, train_y
+    return sampler.fit_transform(train_x, train_y)
+
 def __get_classifier_model(classifier, args):
     """
     Convenience function for obtaining a classification model
@@ -151,13 +190,16 @@ def __get_classifier_model(classifier, args):
             model = SVC(kernel=args.kernel)
         elif classifier == ADA_BOOST:
             model = AdaBoostClassifier()
+        elif classifier == RF:
+            model = RandomForestClassifier(class_weight={1 : 1.5, -1 : 1.0})
     else:
         # We might consider passing all individual classifiers back to compare to the ensemble
         # See the last line in http://scikit-learn.org/stable/modules/ensemble.html#id24
         clfs = []
         for clf in args.classifiers:
             if clf == LOG_REG:
-                clfs.append((clf, SGDClassifier(loss='log', penalty='l2', shuffle=True)))
+                clfs.append((clf, SGDClassifier(loss='log', penalty='l2',
+                                                shuffle=True, random_state=179)))
             elif clf == SVM:
                 clfs.append((clf, SVC(kernel=args.kernel)))
             elif clf == ADA_BOOST:
@@ -196,15 +238,22 @@ def main(args):
             x_train = scaler.fit_transform(x_train)
             x_test = scaler.fit_transform(x_test)
 
+        if args.sampling_technique:
+            print "Attempting to use sampling technique: " + args.sampling_technique
+            x_train, y_train = __get_sample_transformed_examples(args.sampling_technique,
+                                                                     x_train, y_train,
+                                                                     args.sampling_ratio)
         if args.vote == 'none':
             for classifier in args.classifiers:
                 model = __get_classifier_model(classifier, args)
+                print "Fitting data to model"
                 clf = model.fit(x_train, y_train)
                 print "Using classifier " + classifier
                 __print_and_log_results(clf, classifier, x_train, x_test, y_test,
                                         out_file_name, args)
         else:
             model = __get_classifier_model('none', args)
+            print "Fitting data to model"
             clf = model.fit(x_train, y_train)
             print "Using classifier: vote " + args.vote + " with ", args.classifiers
             classifier = "vote-" + args.vote + "-with-classifiers_"
@@ -340,5 +389,10 @@ if __name__ == '__main__':
     argparser.add_argument("--vote",
                            help="Ensemble classifier. 'hard' = majority, 'soft' = average",
                            type=str, default='none')
+    argparser.add_argument("--sampling_technique",
+                          help="The sampling technique to use", type=str, required=False)
+    argparser.add_argument("--sampling_ratio",
+                          help="The sampling ratio to use", type=int,
+                          default=5, required=False)
     args = argparser.parse_args()
     main(args)
