@@ -80,7 +80,9 @@ if __name__ == "__main__":
 
 	train_labels = list(csv.reader(open("Labels.csv", 'r'), delimiter='\t'))
 
-	labels = pd.DataFrame(train_labels)
+    # I think you just need to cast these as ints to solve your issue with
+    # precision and recall
+	labels = pd.DataFrame(train_labels, dtype=int)
 
 	
 	labels.columns = labels.values[0]
