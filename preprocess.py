@@ -25,7 +25,7 @@ def __sklearn_preprocess(data_file_name, fill_in, processed_file_name,
         data_file_name(str): The path to the raw data file
         fill_in(str): The fill-in strategy to use
         processed_file_name(str): The name (including path) of the resulting processed file
-        categorical_inde(int): The index where categorical features begin
+        categorical_index(int): The index where categorical features begin
 
     """
     data_file = open(data_file_name)
@@ -104,7 +104,7 @@ def __pandas_preprocess(data_file_name, categorical_index, num_features,
             if data[col].std() == 0:
                 remove.append(col)
         # Remove columns where less than 20% of rows contain data
-        if count[col] < 10000:
+        if count[col] < 20000:
             remove.append(col)
     remove = set(remove)
     data.drop(remove, axis=1, inplace=True)
