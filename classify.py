@@ -150,19 +150,19 @@ def __get_sample_transformed_examples(sample_type, train_x, train_y, ratio):
     sampler = None
     verbose = True
     if sample_type == SMOTE_REG:
-        sampler = SMOTE(kind='regular', verbose=verbose, ratio=4)
+        sampler = SMOTE(kind='regular', verbose=verbose, ratio=ratio, k=15)
     elif sample_type == SMOTE_SVM:
         # TODO: Make this configurable?
-        svm_args = {'class_weight' : 'auto'}
-        sampler = SMOTE(kind='svm', ratio=ratio, verbose=verbose, **svm_args)
+        svm_args = {'class_weight' : 'balanced'}
+        sampler = SMOTE(kind='svm', ratio=ratio, verbose=verbose, k=15, **svm_args)
     elif sample_type == SMOTE_BORDERLINE_1:
         sampler = SMOTE(kind='borderline1', ratio=ratio, verbose=verbose)
     elif sample_type == SMOTE_BORDERLINE_2:
         sampler = SMOTE(kind='borderline2', ratio=ratio, verbose=verbose)
     elif sample_type == SMOTE_ENN:
-        sampler = SMOTEENN(ratio=ratio, verbose=verbose)
+        sampler = SMOTEENN(ratio=ratio, verbose=verbose, k=15)
     elif sample_type == SMOTE_TOMEK:
-        sampler = SMOTETomek(ratio=ratio,verbose=verbose)
+        sampler = SMOTETomek(ratio=ratio,verbose=verbose, k=15)
     else:
         print "Unrecoqnized sample technique: " + sample_type
         print "Returning original data"
@@ -185,13 +185,14 @@ def __get_classifier_model(classifier, args):
         model = SGDClassifier(loss='log', penalty='l2', shuffle=True, n_iter=5)
         if classifier == LOG_REG:
             model = SGDClassifier(loss='log', penalty='l2', shuffle=True, n_iter=5,
-                                  random_state=179)
+                                  random_state=179, n_jobs=-1)
         elif classifier == SVM:
-            model = SVC(kernel=args.kernel)
+            model = SVC(kernel=args.kernel, class_weight="balanced")
         elif classifier == ADA_BOOST:
             model = AdaBoostClassifier()
         elif classifier == RF:
-            model = RandomForestClassifier(class_weight={1 : 1.5, -1 : 1.0})
+            # Configure the classifier to use all available CPU cores 
+            model = RandomForestClassifier(class_weight="balanced", n_jobs=-1)
     else:
         # We might consider passing all individual classifiers back to compare to the ensemble
         # See the last line in http://scikit-learn.org/stable/modules/ensemble.html#id24
@@ -199,13 +200,13 @@ def __get_classifier_model(classifier, args):
         for clf in args.classifiers:
             if clf == LOG_REG:
                 clfs.append((clf, SGDClassifier(loss='log', penalty='l2',
-                                                shuffle=True, random_state=179)))
+                                                shuffle=True, random_state=179, n_jobs=-1)))
             elif clf == SVM:
                 clfs.append((clf, SVC(kernel=args.kernel)))
             elif clf == ADA_BOOST:
                 clfs.append((clf, AdaBoostClassifier()))
             elif clf == RF:
-                clfs.append((clf, RandomForestClassifier()))
+                clfs.append((clf, RandomForestClassifier(class_weight="balanced", n_jobs=-1)))
         model = VotingClassifier(estimators=clfs, voting=args.vote)
 
     return model
