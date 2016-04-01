@@ -6,7 +6,6 @@ import argparse
 import csv
 import numpy as np
 import os
-import smote
 
 def restricted_float(x):
     x = float(x)
