@@ -203,8 +203,6 @@ def __get_classifier_model(classifier, args):
 
 
 def main(args):
-    voting_methods = ['none', 'hard', 'soft']
-    assert args.vote in voting_methods, "--vote must be one of 'none', 'hard', 'soft'"
     out_file_name = "results.log"
 
     if args.classify:
