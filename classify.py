@@ -5,7 +5,6 @@ Created on Mar 5, 2016
 '''
 
 import argparse
-from csv import DictReader
 import csv
 import numpy as np
 from sklearn.preprocessing import StandardScaler
@@ -14,7 +13,6 @@ from sklearn.svm import SVC
 from sklearn import cross_validation
 from sklearn.ensemble import AdaBoostClassifier
 from sklearn.ensemble import BaggingClassifier
-from sklearn.ensemble import VotingClassifier
 from sklearn.metrics import precision_score, recall_score, roc_auc_score
 from sklearn.cross_validation import KFold
 from sklearn.ensemble.forest import RandomForestClassifier, ExtraTreesClassifier
@@ -144,14 +142,6 @@ def __print_and_log_results(clf, classifier, x_train, x_test, y_test, out_file_n
                     true_count=true_count, actual_count=actual_count,
                     X_train=x_train, X_test=x_test,
                     auc=auc_score, accuracy=accuracy)
-    if args.write_predictions:
-        __write_predictions(predict_hash, predictions, y_test)
-
-def __write_predictions(predict_hash, predictions, actuals):
-    with open('../logs/predictions.csv', 'a') as predict_file:
-        predict_writer = csv.writer(predict_file)
-        for prediction, actual in zip(predictions, actuals):
-            predict_writer.writerow([predict_hash, prediction, actual])
 
 def __get_sample_transformed_examples(sample_type, train_x, train_y, ratio):
     sampler = None
@@ -184,52 +174,31 @@ def __get_classifier_model(classifier, args):
     Convenience function for obtaining a classification model
 
     Args:
-        classifier (str): A string indicating the name of the classifier
+        classifier(str): A string indicating the name of the classifier
         args: An arguments object
 
     Returns:
         A classification model based on the given classifier string
     """
     # Make SGD Logistic Regression model the default
-    if args.vote == 'none':
-        model = SGDClassifier(loss='log', penalty='l2', shuffle=True, n_iter=5)
-        if classifier == LOG_REG:
-            model = SGDClassifier(loss='log', penalty='l2', shuffle=True, n_iter=5,
-                                  random_state=179, n_jobs=-1)
-        elif classifier == SVM:
-            model = SVC(kernel=args.kernel, class_weight="balanced")
-        elif classifier == ADA_BOOST:
-            model = AdaBoostClassifier(n_estimators=300, random_state=17)
-        elif classifier == RF:
-            # Configure the classifier to use all available CPU cores 
-            model = RandomForestClassifier(class_weight="balanced", n_jobs=-1,
-                                           n_estimators=300, random_state=17)
-        elif classifier == GRADIENT_BOOST:
-            model = GradientBoostingClassifier(random_state=17, n_estimators=300)
-        elif classifier == EXTRA_TREES:
-            model = ExtraTreesClassifier(random_state=17, n_estimators=300, n_jobs=-1)
-        elif classifier == BAGGING:
-            model = BaggingClassifier(n_estimators=300, random_state=17, n_jobs=-1)
-    else:
-        # We might consider passing all individual classifiers back to compare to the ensemble
-        # See the last line in http://scikit-learn.org/stable/modules/ensemble.html#id24
-        clfs = []
-        for clf in args.classifiers:
-            if clf == LOG_REG:
-                clfs.append((clf, SGDClassifier(loss='log', penalty='l2',
-                                                shuffle=True, random_state=179, n_jobs=-1)))
-            elif clf == SVM:
-                clfs.append((clf, SVC(kernel=args.kernel)))
-            elif clf == ADA_BOOST:
-                clfs.append((clf, AdaBoostClassifier(random_state=1, n_estimators=300)))
-            elif clf == RF:
-                clfs.append((clf, RandomForestClassifier(class_weight="balanced",
-                                                         n_jobs=-1, n_estimators=100,
-                                                         random_state=17)))
-            elif clf == GRADIENT_BOOST:
-                clfs.append((clf, GradientBoostingClassifier(random_state=17, n_estimators=300)))
-        model = VotingClassifier(estimators=clfs, voting=args.vote)
-
+    model = SGDClassifier(loss='log', penalty='l2', shuffle=True, n_iter=5)
+    if classifier == LOG_REG:
+        model = SGDClassifier(loss='log', penalty='l2', shuffle=True, n_iter=5,
+                              random_state=179, n_jobs=-1)
+    elif classifier == SVM:
+        model = SVC(kernel=args.kernel, class_weight="balanced")
+    elif classifier == ADA_BOOST:
+        model = AdaBoostClassifier(n_estimators=300, random_state=17)
+    elif classifier == RF:
+        # Configure the classifier to use all available CPU cores 
+        model = RandomForestClassifier(class_weight="balanced", n_jobs=-1,
+                                       n_estimators=300, random_state=17)
+    elif classifier == GRADIENT_BOOST:
+        model = GradientBoostingClassifier(random_state=17, n_estimators=300)
+    elif classifier == EXTRA_TREES:
+        model = ExtraTreesClassifier(random_state=17, n_estimators=300, n_jobs=-1)
+    elif classifier == BAGGING:
+        model = BaggingClassifier(n_estimators=300, random_state=17, n_jobs=-1)
     return model
 
 
@@ -255,45 +224,29 @@ def main(args):
         train_labels_file.close()
         test_labels_file.close()
 
-        if args.scale:
-            scaler = StandardScaler()
-            x_train = scaler.fit_transform(x_train)
-            x_test = scaler.fit_transform(x_test)
-
         if args.sampling_technique:
             print "Attempting to use sampling technique: " + args.sampling_technique
             x_train, y_train = __get_sample_transformed_examples(args.sampling_technique,
                                                                      x_train, y_train,
                                                                      args.sampling_ratio)
-        if args.vote == 'none':
-            for classifier in args.classifiers:
-                model = __get_classifier_model(classifier, args)
-                print "Using classifier " + classifier
-                print "Fitting data to model"
-                clf = model.fit(x_train, y_train)
-                if args.select_best:
-                    # Unable to use BaggingClassifier with SelectFromModel
-                    if classifier != BAGGING:
-                        print "Selecting best features"
-                        sfm = SelectFromModel(clf, prefit=True)
-                        x_train = sfm.transform(x_train)
-                        x_test = sfm.transform(x_test)
-                        clf = model.fit(x_train, y_train)
-                __print_and_log_results(clf, classifier, x_train, x_test, y_test,
-                                        out_file_name, args)
-        else:
-            model = __get_classifier_model('none', args)
+
+        if args.scale:
+            scaler = StandardScaler()
+            x_train = scaler.fit_transform(x_train)
+            x_test = scaler.fit_transform(x_test)
+        for classifier in args.classifiers:
+            model = __get_classifier_model(classifier, args)
+            print "Using classifier " + classifier
             print "Fitting data to model"
             clf = model.fit(x_train, y_train)
             if args.select_best:
+                # Unable to use BaggingClassifier with SelectFromModel
                 if classifier != BAGGING:
-                    sfm = SelectFromModel(clf, prefit = True)
+                    print "Selecting best features"
+                    sfm = SelectFromModel(clf, prefit=True)
                     x_train = sfm.transform(x_train)
                     x_test = sfm.transform(x_test)
                     clf = model.fit(x_train, y_train)
-            print "Using classifier: vote " + args.vote + " with ", args.classifiers
-            classifier = "vote-" + args.vote + "-with-classifiers_"
-            classifier += "_".join(args.classifiers)
             __print_and_log_results(clf, classifier, x_train, x_test, y_test,
                                     out_file_name, args)
 
@@ -317,7 +270,44 @@ def main(args):
             scaler = StandardScaler().fit(X_train)
             X_train = scaler.transform(X_train)
             X_test = scaler.transform(X_test)
-        if args.vote == 'none':
+        for classifier in args.classifiers:
+            print "Using classifier " + classifier
+            model = __get_classifier_model(classifier, args)
+            print "Fitting model"
+            clf = model.fit(X_train, y_train)
+            if args.select_best:
+                if classifier != BAGGING:
+                    sfm = SelectFromModel(clf, prefit = True)
+                    X_train = sfm.transform(X_train)
+                    X_test = sfm.transform(X_test)
+                    clf = model.fit(X_train, y_train)
+            print "Evaluating results"
+            __print_and_log_results(clf, classifier, X_train, X_test, y_test,
+                                    out_file_name, args)
+    elif args.kfold:
+        # Cast to list to keep it all in memory
+        data_file = open((args.data_file, 'r'))
+        data = list(csv.reader(data_file))
+        data_file.close()
+        labels_file = open(args.labels)
+        labels = np.array([int(x.strip()) for x in labels_file.readlines()])
+        labels_file.close()
+        X = np.array(data, dtype=float)
+        kf = KFold(len(X), n_folds=10, shuffle=True, random_state=42)
+        for train, test in kf:
+            print "kfold loop iterate"
+            X_train, X_test, y_train, y_test = X[train], X[test], labels[train], labels[test]
+
+            if args.sampling_technique:
+                print "Attempting to use sampling technique: " + args.sampling_technique
+                X_train, y_train = __get_sample_transformed_examples(args.sampling_technique,
+                                                                     X_train, y_train,
+                                                                     args.sampling_ratio)
+            if args.scale:
+                scaler = StandardScaler().fit(X_train)
+                X_train = scaler.transform(X_train)
+                X_test = scaler.transform(X_test)
+
             for classifier in args.classifiers:
                 print "Using classifier " + classifier
                 model = __get_classifier_model(classifier, args)
@@ -328,57 +318,10 @@ def main(args):
                         sfm = SelectFromModel(clf, prefit = True)
                         X_train = sfm.transform(X_train)
                         X_test = sfm.transform(X_test)
-                        clf = model.fit(x_train, y_train)
+                        clf = model.fit(X_train, y_train)
                 print "Evaluating results"
                 __print_and_log_results(clf, classifier, X_train, X_test, y_test,
                                         out_file_name, args)
-        else:
-            model = __get_classifier_model('none', args)
-            clf = model.fit(X_train, y_train)
-            print "Using classifier: vote " + args.vote + " with ", args.classifiers
-            classifier = "vote-" + args.vote + "-with-classifiers_"
-            classifier += "_".join(args.classifiers)
-            __print_and_log_results(clf, classifier, X_train, X_test, y_test, out_file_name,
-                                    args)
-    elif args.kfold:
-        # Store column names as features, except ORF and Essential
-        # Cast to list to keep it all in memory
-        data = list(DictReader(open(args.data_file, 'rU')))
-
-        labels = []
-        train_features = []
-        for example in data:
-            train_feat = []
-            for feature in args.features:
-                train_feat.append(example[feature])
-            train_features.append(train_feat)
-        X = np.array(train_features, dtype=float)
-        kf = KFold(len(X), n_folds=10, shuffle=True, random_state=42)
-        for train, test in kf:
-            print "kfold loop iterate"
-            X_train, X_test, y_train, y_test = X[train], X[test], labels[train], labels[test]
-
-            if args.scale:
-                scaler = StandardScaler().fit(X_train)
-                X_train = scaler.transform(X_train)
-                X_test = scaler.transform(X_test)
-            if args.vote == 'none':
-                for classifier in args.classifiers:
-                    print "Using classifier " + classifier
-                    model = __get_classifier_model(classifier, args)
-                    print "Fitting model"
-                    clf = model.fit(X_train, y_train)
-                    print "Evaluating results"
-                    __print_and_log_results(clf, classifier, X_train, X_test, y_test,
-                                            out_file_name, args)
-            else:
-                model = __get_classifier_model('none', args)
-                clf = model.fit(X_train, y_train)
-                print "Using classifier: vote " + args.vote + " with ", args.classifiers
-                classifier = "vote-" + args.vote + "-with-classifiers_"
-                classifier += "_".join(args.classifiers)
-                __print_and_log_results(clf, classifier, X_train, X_test, y_test, out_file_name,
-                                        args)
         print "kfold loop done"
 
 if __name__ == '__main__':
@@ -405,8 +348,6 @@ if __name__ == '__main__':
                            action="store_true")
     argparser.add_argument("--classifiers", help="A list of classifiers to use",
                            nargs='+', required=False, default=['svm'])
-    argparser.add_argument("--metrics", help="A list of metrics to use",
-                           nargs='+', required=False)
     argparser.add_argument("--kernel",
                            help="The kernel to be used for SVM classification",
                            type=str, default='rbf')
@@ -420,18 +361,12 @@ if __name__ == '__main__':
                            action="store_true")
     argparser.add_argument("--scale", help="Scale the data with StandardScale",
                            action="store_true")
-    argparser.add_argument("--write_predictions", help="Write the predictions to a file",
-                           action="store_true")
-    argparser.add_argument("--vote",
-                           help="Ensemble classifier. 'hard' = majority, 'soft' = average",
-                           type=str, default='none')
     argparser.add_argument("--sampling_technique",
                           help="The sampling technique to use", type=str, required=False)
     argparser.add_argument("--sampling_ratio",
                           help="The sampling ratio to use", type=float,
                           default=5, required=False)
-    argparser.add_argument("--select_best",
-                           help="Select best features",
+    argparser.add_argument("--select_best", help="Select best features",
                            action="store_true")
     args = argparser.parse_args()
     main(args)
