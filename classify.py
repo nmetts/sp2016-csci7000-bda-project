@@ -257,7 +257,7 @@ def main(args):
         data = list(csv.reader(data_file))
         data_file.close()
         examples = np.array(data[1:], dtype=float)
-        X_train, X_test, y_train, y_test = cross_validation.train_test_split(examples, labels, test_size=0.2)
+        X_train, X_test, y_train, y_test = cross_validation.train_test_split(examples, labels, test_size=0.1)
 
         if args.sampling_technique:
             print "Attempting to use sampling technique: " + args.sampling_technique
@@ -284,13 +284,13 @@ def main(args):
                                     out_file_name, args)
     elif args.kfold:
         # Cast to list to keep it all in memory
-        data_file = open((args.data_file, 'r'))
+        data_file = open(args.data_file, 'r')
         data = list(csv.reader(data_file))
         data_file.close()
         labels_file = open(args.labels)
         labels = np.array([int(x.strip()) for x in labels_file.readlines()])
         labels_file.close()
-        X = np.array(data, dtype=float)
+        X = np.array(data[1:], dtype=float)
         kf = KFold(len(X), n_folds=10, shuffle=True, random_state=42)
         for train, test in kf:
             print "kfold loop iterate"
