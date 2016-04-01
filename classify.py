@@ -286,10 +286,11 @@ def main(args):
             print "Fitting data to model"
             clf = model.fit(x_train, y_train)
             if args.select_best:
-                sfm = SelectFromModel(clf, prefit = True)
-                x_train = sfm.transform(x_train)
-                x_test = sfm.transform(x_test)
-                clf = model.fit(x_train, y_train)
+                if classifier != BAGGING:
+                    sfm = SelectFromModel(clf, prefit = True)
+                    x_train = sfm.transform(x_train)
+                    x_test = sfm.transform(x_test)
+                    clf = model.fit(x_train, y_train)
             print "Using classifier: vote " + args.vote + " with ", args.classifiers
             classifier = "vote-" + args.vote + "-with-classifiers_"
             classifier += "_".join(args.classifiers)
@@ -323,10 +324,11 @@ def main(args):
                 print "Fitting model"
                 clf = model.fit(X_train, y_train)
                 if args.select_best:
-                    sfm = SelectFromModel(clf, prefit = True)
-                    X_train = sfm.transform(X_train)
-                    X_test = sfm.transform(X_test)
-                    clf = model.fit(x_train, y_train)
+                    if classifier != BAGGING:
+                        sfm = SelectFromModel(clf, prefit = True)
+                        X_train = sfm.transform(X_train)
+                        X_test = sfm.transform(X_test)
+                        clf = model.fit(x_train, y_train)
                 print "Evaluating results"
                 __print_and_log_results(clf, classifier, X_train, X_test, y_test,
                                         out_file_name, args)
