@@ -299,23 +299,23 @@ def main(args):
     elif args.cross_validate:
         # Cast to list to keep it all in memory
         labels_file = open(args.labels)
-        labels = [int(x.strip()) for x in labels_file.readlines()]
+        labels = np.array([int(x.strip()) for x in labels_file.readlines()])
         labels_file.close()
         data_file = open(args.data_file, 'r')
         data = list(csv.reader(data_file))
         data_file.close()
         examples = np.array(data[1:], dtype=float)
-        X_train, X_test, y_train, y_test = cross_validation.train_test_split (examples, labels, test_size=0.2)
+        X_train, X_test, y_train, y_test = cross_validation.train_test_split(examples, labels, test_size=0.2)
 
-        if args.scale:
-            scaler = StandardScaler().fit(X_train)
-            X_train = scaler.transform(X_train)
-            X_test = scaler.transform(X_test)
         if args.sampling_technique:
             print "Attempting to use sampling technique: " + args.sampling_technique
             X_train, y_train = __get_sample_transformed_examples(args.sampling_technique,
                                                                      X_train, y_train,
                                                                      args.sampling_ratio)
+        if args.scale:
+            scaler = StandardScaler().fit(X_train)
+            X_train = scaler.transform(X_train)
+            X_test = scaler.transform(X_test)
         if args.vote == 'none':
             for classifier in args.classifiers:
                 print "Using classifier " + classifier
