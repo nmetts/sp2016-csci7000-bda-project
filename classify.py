@@ -54,7 +54,7 @@ class ClassifyArgs(object):
                  train_file="../Data/orange_small_train.data",
                  test_file="../Data/orange_small_train.data",classify=False,
                  classifiers=None, kernel='rbf', cross_validate=False,
-                 write_to_log=False, features=None, scale=False, vote='none',
+                 write_to_log=False, features=None, scale=False,
                  kfold=False, write_predictions=False):
         self.data_file = data_file
         self.train_file = train_file
@@ -72,14 +72,13 @@ class ClassifyArgs(object):
         else:
             self.features = features
         self.scale = scale
-        self.vote = vote
         self.kfold = kfold
         self.write_predictions = write_predictions
     
     def __repr__(self):
         str_list = [self.data_file, self.train_file, self.test_file,
                     self.classify, self.kernel, self.cross_validate, self.scale,
-                    self.vote, self.kfold]
+                    self.kfold]
         str_list += self.features
         return "_".join([str(x) for x in str_list])
 
@@ -224,7 +223,10 @@ def main(args):
 
         if args.sampling_technique:
             print "Attempting to use sampling technique: " + args.sampling_technique
-            x_train, y_train = __get_sample_transformed_examples(args.sampling_technique,
+            if args.sampling_ratio == float('NaN'):
+                print "Unable to use sampling technique. Ratio is NaN."
+            else:
+                x_train, y_train = __get_sample_transformed_examples(args.sampling_technique,
                                                                      x_train, y_train,
                                                                      args.sampling_ratio)
 
@@ -261,7 +263,10 @@ def main(args):
 
         if args.sampling_technique:
             print "Attempting to use sampling technique: " + args.sampling_technique
-            X_train, y_train = __get_sample_transformed_examples(args.sampling_technique,
+            if args.sampling_ratio == float('NaN'):
+                print "Unable to use sampling technique. Ratio is NaN."
+            else:
+                X_train, y_train = __get_sample_transformed_examples(args.sampling_technique,
                                                                      X_train, y_train,
                                                                      args.sampling_ratio)
         if args.scale:
@@ -298,7 +303,10 @@ def main(args):
 
             if args.sampling_technique:
                 print "Attempting to use sampling technique: " + args.sampling_technique
-                X_train, y_train = __get_sample_transformed_examples(args.sampling_technique,
+                if args.sampling_ratio == float('NaN'):
+                    print "Unable to use sampling technique. Ratio is NaN."
+                else:
+                    X_train, y_train = __get_sample_transformed_examples(args.sampling_technique,
                                                                      X_train, y_train,
                                                                      args.sampling_ratio)
             if args.scale:
@@ -349,7 +357,6 @@ if __name__ == '__main__':
     argparser.add_argument("--kernel",
                            help="The kernel to be used for SVM classification",
                            type=str, default='rbf')
-    # Is this option needed if we're using training and test files?
     argparser.add_argument("--cross_validate",
                            help="Cross validate using training and test set",
                            action="store_true")
@@ -363,7 +370,7 @@ if __name__ == '__main__':
                           help="The sampling technique to use", type=str, required=False)
     argparser.add_argument("--sampling_ratio",
                           help="The sampling ratio to use", type=float,
-                          default=5, required=False)
+                          default=float('NaN'), required=False)
     argparser.add_argument("--select_best", help="Select best features",
                            action="store_true")
     args = argparser.parse_args()
