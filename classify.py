@@ -99,25 +99,6 @@ def write_log(out_file_name, args, classifier, precision, recall,
         out_writer = csv.writer(f, lineterminator='\n')
         out_writer.writerow(log)
 
-def svm_classify(train_X, train_Y, test_X, test_Y, kernel, reg):
-    """
-    A function to run an SVM classification
-
-    Args:
-        train_X: training feature values
-        train_Y: training labels
-        test_X: testing feature values
-        test_Y: testing labels
-        kernel: a string representing the kernel to use
-        reg: a float representing the regularization parameter
-    """
-    clf = SVC(kernel=kernel, C=reg)
-    clf.fit(train_X, train_Y)
-    sc = clf.score(test_X, test_Y)
-    print('SVM score', kernel, reg, sc)
-
-    return clf
-
 def __print_and_log_results(clf, classifier, x_train, x_test, y_test, out_file_name,
                             args):
     predictions = clf.predict(x_test)
@@ -180,12 +161,14 @@ def __get_classifier_model(classifier, args):
         A classification model based on the given classifier string
     """
     # Make SGD Logistic Regression model the default
-    model = SGDClassifier(loss='log', penalty='l2', shuffle=True, n_iter=5)
+    model = SGDClassifier(loss='log', penalty='l2', shuffle=True, n_iter=5,
+                          n_jobs=-1, random_state=179)
     if classifier == LOG_REG:
         model = SGDClassifier(loss='log', penalty='l2', shuffle=True, n_iter=5,
                               random_state=179, n_jobs=-1)
     elif classifier == SVM:
-        model = SVC(kernel=args.kernel, class_weight="balanced")
+        model = SVC(kernel=args.kernel, class_weight="balanced", cache_size=8096,
+                    random_state=17)
     elif classifier == ADA_BOOST:
         model = AdaBoostClassifier(n_estimators=300, random_state=17)
     elif classifier == RF:
@@ -280,6 +263,7 @@ def main(args):
             clf = model.fit(X_train, y_train)
             if args.select_best:
                 if classifier != BAGGING:
+                    print "Selecting best features"
                     sfm = SelectFromModel(clf, prefit = True)
                     X_train = sfm.transform(X_train)
                     X_test = sfm.transform(X_test)
@@ -332,28 +316,36 @@ def main(args):
 
 if __name__ == '__main__':
     argparser = argparse.ArgumentParser()
+    # Data file should be used when the task is cross-validation or k-fold
+    # validation
     argparser.add_argument("--data_file", help="Name of data file",
                            type=str, default="../Data/orange_small_train.data",
                            required=False)
+    # Labels is intended to be used for the cross-validation or k-fold validation
+    # task
+    argparser.add_argument("--labels", help="Name of labels file",
+                           type=str, default="../Data/orange_small_train_churn.labels",
+                           required=False)
+    # Train file and test file are intended for classification (the classify
+    # option)
     argparser.add_argument("--train_file", help="Name of train file",
                            type=str, default="../Data/orange_small_train.data",
                            required=False)
     argparser.add_argument("--test_file", help="Name of test file",
                            type=str, default="../Data/orange_small_test.data",
                            required=False)
-    argparser.add_argument("--labels", help="Name of labels file",
-                           type=str, default="../Data/orange_small_train_churn.labels",
-                           required=False)
+    # Test and train labels are needed for the classify task
     argparser.add_argument("--test_labels", help="Name of test labels file",
                            type=str, default="../Data/orange_small_train_churn.labels",
                            required=False)
     argparser.add_argument("--train_labels", help="Name of train labels file",
                            type=str, default="../Data/orange_small_train_churn.labels",
                            required=False)
+    # The classify task uses pre-split train/test files with train/test labels
     argparser.add_argument("--classify", help="Classify using training and test set",
                            action="store_true")
     argparser.add_argument("--classifiers", help="A list of classifiers to use",
-                           nargs='+', required=False, default=['svm'])
+                           nargs='+', required=False, default=['log_reg'])
     argparser.add_argument("--kernel",
                            help="The kernel to be used for SVM classification",
                            type=str, default='rbf')
