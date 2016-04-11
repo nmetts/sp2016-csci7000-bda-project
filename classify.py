@@ -163,10 +163,7 @@ def __get_classifier_model(classifier, args):
     # Make SGD Logistic Regression model the default
     model = SGDClassifier(loss='log', penalty='l2', shuffle=True, n_iter=5,
                           n_jobs=-1, random_state=179)
-    if classifier == LOG_REG:
-        model = SGDClassifier(loss='log', penalty='l2', shuffle=True, n_iter=5,
-                              random_state=179, n_jobs=-1)
-    elif classifier == SVM:
+    if classifier == SVM:
         model = SVC(kernel=args.kernel, class_weight="balanced", cache_size=8096,
                     random_state=17)
     elif classifier == ADA_BOOST:
