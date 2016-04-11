@@ -11,6 +11,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import SGDClassifier
 from sklearn.svm import SVC
 from sklearn import cross_validation
+from sklearn import svm, grid_search
 from sklearn.ensemble import AdaBoostClassifier
 from sklearn.ensemble import BaggingClassifier
 from sklearn.metrics import precision_score, recall_score, roc_auc_score
@@ -55,7 +56,7 @@ class ClassifyArgs(object):
                  test_file="../Data/orange_small_train.data",classify=False,
                  classifiers=None, kernel='rbf', cross_validate=False,
                  write_to_log=False, features=None, scale=False,
-                 kfold=False, write_predictions=False):
+                 kfold=False, write_predictions=False, grid_search=False):
         self.data_file = data_file
         self.train_file = train_file
         self.test_file = test_file
@@ -218,7 +219,34 @@ def main(args):
             model = __get_classifier_model(classifier, args)
             print "Using classifier " + classifier
             print "Fitting data to model"
+            if args.grid_search:
+                print "Applying parameter tuning to model"
+                if classifier == LOG_REG:
+                    parameters = {'loss':('log','hinge'), 'penalty':('l2', 'l1'), 'shuffle':[True], 'n_iter':[5], 'n_jobs':[-1], 'random_state':[179]}
+                    model = grid_search.GridSearchCV(model, parameters)
+                elif classifier == SVM:
+                    parameters = {'kernel':('rbf', 'poly'), 'cache_size':[8096], 'random_state':[17]}
+                    model = grid_search.GridSearchCV(model, parameters)
+                elif classifier == ADA_BOOST:
+                    parameters = {'n_estimators':[300], 'random_state':[13]}
+                    model = grid_search.GridSearchCV(model, parameters)
+                elif classifier == RF:
+                    parameters = {'criterion':('gini', 'entropy'), 'n_jobs':[-1], 'n_estimators':[300], 'random_state':[17]}
+                    model = grid_search.GridSearchCV(model, parameters)
+                elif classifier == GRADIENT_BOOST:
+                    parameters = {'n_estimators':[300], 'random_state':[17]}
+                    model = grid_search.GridSearchCV(model, parameters)
+                elif classifier == EXTRA_TREES:
+                    parameters = {'n_estimators':[300], 'random_state':[17], 'n_jobs':[-1], 'criterion':('gini', 'entropy'), 'max_features':('log2', 40, 0.4), 'max_features':[40, 0.4], 'bootstrap':[True, False], 'bootstrap_features':[True, False]}
+                    model = grid_search.GridSearchCV(model, parameters)
+                elif classifier == BAGGING:
+                    parameters = {'n_estimators':[300], 'random_state':[17], 'max_samples': [.4, 30],'max_features':[40, 0.4], 'bootstrap':[True, False], 'bootstrap_features':[True, False], 'n_jobs':[-1]}
+                    model = grid_search.GridSearchCV(model, parameters)
+
+                    
             clf = model.fit(x_train, y_train)
+            print "Parameters used in model:"
+            #print clf.get_params(deep=False)
             if args.select_best:
                 # Unable to use BaggingClassifier with SelectFromModel
                 if classifier != BAGGING:
@@ -360,6 +388,8 @@ if __name__ == '__main__':
     argparser.add_argument("--sampling_ratio",
                           help="The sampling ratio to use", type=float,
                           default=float('NaN'), required=False)
+    argparser.add_argument("--grid_search", help="Use grid search",
+                           action="store_true")
     argparser.add_argument("--select_best", help="Select best features",
                            action="store_true")
     args = argparser.parse_args()
