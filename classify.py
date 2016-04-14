@@ -28,7 +28,7 @@ from unbalanced_dataset.over_sampling import SMOTE
 from unbalanced_dataset.pipeline import SMOTEENN
 from unbalanced_dataset.pipeline import SMOTETomek
 from unbalanced_dataset.unbalanced_dataset import UnbalancedDataset
-from unbalanced_dataset.under_sampling import UnderSampler
+from unbalanced_dataset.under_sampling import UnderSampler, ClusterCentroids, NearMiss, TomekLinks
 
 
 # Constants for classifier names
@@ -48,6 +48,9 @@ SMOTE_BORDERLINE_2 = "smote_borderline_2"
 SMOTE_ENN = "smote_enn"
 SMOTE_TOMEK = "smote_tomek"
 UNDERSAMPLER = "undersampler"
+TOMEK_LINKS = "tomlek_links"
+CLUSTER_CENTROIDS = "cluster_centroids"
+NEARMISS = "near_miss"
 ADASYN_SAMPLER = "adasyn"
 
 class ClassifyArgs(object):
@@ -149,6 +152,12 @@ def __get_sample_transformed_examples(sample_type, train_x, train_y, ratio):
                                random_state=17)
     elif sample_type == ADASYN_SAMPLER:
         sampler = ADASYN(k=15,imb_threshold=0.6, ratio=ratio)
+    elif sample_type == TOMEK_LINKS:
+        sampler = TomekLinks()
+    elif sample_type == CLUSTER_CENTROIDS:
+        sampler = ClusterCentroids(ratio=ratio)
+    elif sample_type == NEARMISS:
+        sampler = NearMiss(ratio=ratio)
     else:
         print "Unrecoqnized sample technique: " + sample_type
         print "Returning original data"
