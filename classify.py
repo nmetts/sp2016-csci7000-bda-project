@@ -6,28 +6,30 @@ Created on Mar 5, 2016
 
 import argparse
 import csv
-import numpy as np
-from sklearn.preprocessing import StandardScaler
-from sklearn.linear_model import SGDClassifier
-from sklearn.svm import SVC
+
 from sklearn import cross_validation
 from sklearn import svm, grid_search
+from sklearn.cross_validation import KFold
 from sklearn.ensemble import AdaBoostClassifier
 from sklearn.ensemble import BaggingClassifier
-from sklearn.metrics import precision_score, recall_score, roc_auc_score
-from sklearn.cross_validation import KFold
 from sklearn.ensemble.forest import RandomForestClassifier, ExtraTreesClassifier
+from sklearn.ensemble.gradient_boosting import GradientBoostingClassifier
 from sklearn.feature_selection import SelectFromModel
+from sklearn.linear_model import SGDClassifier
+from sklearn.metrics import precision_score, recall_score, roc_auc_score
+from sklearn.metrics.classification import accuracy_score
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVC
 
-from unbalanced_dataset.unbalanced_dataset import UnbalancedDataset
-
+from adasyn import ADASYN
+import numpy as np
 from unbalanced_dataset.over_sampling import OverSampler
 from unbalanced_dataset.over_sampling import SMOTE
 from unbalanced_dataset.pipeline import SMOTEENN
 from unbalanced_dataset.pipeline import SMOTETomek
+from unbalanced_dataset.unbalanced_dataset import UnbalancedDataset
 from unbalanced_dataset.under_sampling import UnderSampler
-from sklearn.metrics.classification import accuracy_score
-from sklearn.ensemble.gradient_boosting import GradientBoostingClassifier
+
 
 # Constants for classifier names
 LOG_REG = 'log_reg'
@@ -46,6 +48,7 @@ SMOTE_BORDERLINE_2 = "smote_borderline_2"
 SMOTE_ENN = "smote_enn"
 SMOTE_TOMEK = "smote_tomek"
 UNDERSAMPLER = "undersampler"
+ADASYN_SAMPLER = "adasyn"
 
 class ClassifyArgs(object):
     """
@@ -144,6 +147,8 @@ def __get_sample_transformed_examples(sample_type, train_x, train_y, ratio):
     elif sample_type == UNDERSAMPLER:
         sampler = UnderSampler(ratio=ratio, verbose=verbose, replacement=False,
                                random_state=17)
+    elif sample_type == ADASYN_SAMPLER:
+        sampler = ADASYN(k=15,imb_threshold=0.6, ratio=ratio)
     else:
         print "Unrecoqnized sample technique: " + sample_type
         print "Returning original data"
@@ -223,26 +228,26 @@ def main(args):
                 print "Applying parameter tuning to model"
                 if classifier == LOG_REG:
                     parameters = {'loss':('log','hinge'), 'penalty':('l2', 'l1'), 'shuffle':[True], 'n_iter':[5], 'n_jobs':[-1], 'random_state':[179]}
-                    model = grid_search.GridSearchCV(model, parameters)
+                    model = grid_search.GridSearchCV(model, parameters, scoring='roc_auc', verbose=2)
                 elif classifier == SVM:
                     parameters = {'kernel':('rbf', 'poly'), 'cache_size':[8096], 'random_state':[17]}
-                    model = grid_search.GridSearchCV(model, parameters)
+                    model = grid_search.GridSearchCV(model, parameters, scoring='roc_auc', verbose=2)
                 elif classifier == ADA_BOOST:
                     parameters = {'n_estimators':[300], 'random_state':[13]}
-                    model = grid_search.GridSearchCV(model, parameters)
+                    model = grid_search.GridSearchCV(model, parameters, scoring=roc_auc_score, verbose=2)
                 elif classifier == RF:
                     parameters = {'criterion':('gini', 'entropy'), 'n_jobs':[-1], 'n_estimators':[300], 'random_state':[17]}
-                    model = grid_search.GridSearchCV(model, parameters)
+                    model = grid_search.GridSearchCV(model, parameters, scoring='roc_auc', verbose=2)
                 elif classifier == GRADIENT_BOOST:
                     parameters = {'n_estimators':[300], 'random_state':[17]}
-                    model = grid_search.GridSearchCV(model, parameters)
+                    model = grid_search.GridSearchCV(model, parameters, scoring='roc_auc', verbose=2)
                 elif classifier == EXTRA_TREES:
                     parameters = {'n_estimators':[300], 'random_state':[17], 'n_jobs':[-1], 'criterion':('gini', 'entropy'), 'max_features':('log2', 40, 0.4), 'max_features':[40, 0.4], 'bootstrap':[True, False], 'bootstrap_features':[True, False]}
-                    model = grid_search.GridSearchCV(model, parameters)
+                    model = grid_search.GridSearchCV(model, parameters, scoring='roc_auc', verbose=2)
                 elif classifier == BAGGING:
                     parameters = {'n_estimators':[300], 'random_state':[17], 'max_samples': [.4, 30],'max_features':[40, 0.4], 'bootstrap':[True, False], 'bootstrap_features':[True, False], 'n_jobs':[-1]}
-                    model = grid_search.GridSearchCV(model, parameters)
-
+                    model = grid_search.GridSearchCV(model, parameters, scoring='roc_auc', verbose=2)
+                print "Best params: " + str(model.best_params_)
                     
             clf = model.fit(x_train, y_train)
             print "Parameters used in model:"
@@ -285,7 +290,35 @@ def main(args):
             print "Using classifier " + classifier
             model = __get_classifier_model(classifier, args)
             print "Fitting model"
+            if args.grid_search:
+                print "Applying parameter tuning to model"
+                if classifier == LOG_REG:
+                    parameters = {'loss':('log','hinge'), 'penalty':('l2', 'l1'), 'shuffle':[True], 'n_iter':[5], 'n_jobs':[-1], 'random_state':[179]}
+                    model = grid_search.GridSearchCV(model, parameters, scoring='roc_auc', verbose=2)
+                elif classifier == SVM:
+                    parameters = {'kernel':('rbf', 'poly'), 'cache_size':[8096], 'random_state':[17]}
+                    model = grid_search.GridSearchCV(model, parameters, scoring='roc_auc', verbose=2)
+                elif classifier == ADA_BOOST:
+                    parameters = {'n_estimators':[300], 'random_state':[13]}
+                    model = grid_search.GridSearchCV(model, parameters, scoring='roc_auc', verbose=2)
+                elif classifier == RF:
+                    parameters = {'criterion':('gini', 'entropy'), 'n_jobs':[-1], 'n_estimators':[300], 'random_state':[17]}
+                    model = grid_search.GridSearchCV(model, parameters, scoring='roc_auc', verbose=2)
+                elif classifier == GRADIENT_BOOST:
+                    parameters = {'n_estimators':[300], 'random_state':[17]}
+                    model = grid_search.GridSearchCV(model, parameters, scoring='roc_auc', verbose=2)
+                elif classifier == EXTRA_TREES:
+                    parameters = {'n_estimators':[300], 'random_state':[17], 'n_jobs':[-1], 'criterion':('gini', 'entropy'), 'max_features':('log2', 40, 0.4), 'max_features':[40, 0.4], 'bootstrap':[True, False], 'bootstrap_features':[True, False]}
+                    model = grid_search.GridSearchCV(model, parameters, scoring='roc_auc', verbose=2)
+                elif classifier == BAGGING:
+                    parameters = {'n_estimators' : [400], 'random_state' : [17],
+                                  'max_samples' : np.arange(0.5, 0.9, 0.1),
+                                  'max_features' : np.arange(0.5, 0.9, 0.1),
+                                  'bootstrap':[False], 'bootstrap_features':[False], 'n_jobs':[-1]}
+                    model = grid_search.GridSearchCV(model, parameters, scoring='roc_auc', verbose=2)
             clf = model.fit(X_train, y_train)
+            if args.grid_search:
+                print "Best params: " + str(model.best_params_)
             if args.select_best:
                 if classifier != BAGGING:
                     print "Selecting best features"
