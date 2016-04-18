@@ -7,28 +7,28 @@ Created on Mar 5, 2016
 import argparse
 import csv
 
+from sklearn import  grid_search
 from sklearn import cross_validation
-from sklearn import svm, grid_search
 from sklearn.cross_validation import KFold
 from sklearn.ensemble import AdaBoostClassifier
 from sklearn.ensemble import BaggingClassifier
 from sklearn.ensemble.forest import RandomForestClassifier, ExtraTreesClassifier
 from sklearn.ensemble.gradient_boosting import GradientBoostingClassifier
 from sklearn.feature_selection import SelectFromModel
-from sklearn.linear_model import SGDClassifier
+from sklearn.linear_model import Perceptron, SGDClassifier
+from sklearn.linear_model.passive_aggressive import PassiveAggressiveClassifier
 from sklearn.metrics import precision_score, recall_score, roc_auc_score
 from sklearn.metrics.classification import accuracy_score
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import RobustScaler, StandardScaler
 from sklearn.svm import SVC
-
-from adasyn import ADASYN
-import numpy as np
-from unbalanced_dataset.over_sampling import OverSampler
+from sklearn.tree.tree import DecisionTreeClassifier
 from unbalanced_dataset.over_sampling import SMOTE
 from unbalanced_dataset.pipeline import SMOTEENN
 from unbalanced_dataset.pipeline import SMOTETomek
-from unbalanced_dataset.unbalanced_dataset import UnbalancedDataset
 from unbalanced_dataset.under_sampling import UnderSampler, ClusterCentroids, NearMiss, TomekLinks
+
+from adasyn import ADASYN
+import numpy as np
 
 
 # Constants for classifier names
@@ -39,6 +39,8 @@ GRADIENT_BOOST = 'gradient_boost'
 RF = 'random_forest'
 EXTRA_TREES = 'extra_trees'
 BAGGING = 'bagging'
+PASSIVE_AGGRESSIVE = 'passive_aggressive'
+PERCEPTRON = 'perceptron'
 
 # Constants for sampling techniques
 SMOTE_REG = "smote"
@@ -90,7 +92,8 @@ class ClassifyArgs(object):
         return "_".join([str(x) for x in str_list])
 
 def write_log(out_file_name, args, classifier, precision, recall,
-              true_count, actual_count, X_train, X_test, auc, accuracy):
+              true_count, actual_count, X_train, X_test, auc, accuracy,
+              probablistic_prediction, prediction_threshold):
     """
     Function to write results of a run to a file.
     """
@@ -108,7 +111,32 @@ def write_log(out_file_name, args, classifier, precision, recall,
 
 def __print_and_log_results(clf, classifier, x_train, x_test, y_test, out_file_name,
                             args):
-    predictions = clf.predict(x_test)
+    probablistic_predictions = False
+    if args.predict_proba:
+        predict_proba_func = getattr(clf, "predict_proba", None)
+        if predict_proba_func is not None:
+            probablistic_predictions = True
+            prob_predictions = clf.predict_proba(x_test)
+            predictions = []
+            pos_predictions = []
+            for prediction in prob_predictions:
+                pos_predictions.append(prediction[1])
+                if prediction[1] > args.predict_threshold:
+                    predictions.append(1)
+                else:
+                    predictions.append(-1)
+            pos_predictions = np.array(pos_predictions)
+            mean_confidence = np.mean(pos_predictions)
+            max_confidence = max(pos_predictions)
+            min_confidence = min(pos_predictions)
+            print "Mean confidence: " + str(mean_confidence)
+            print "Max confidence: " + str(max_confidence)
+            print "Min confidence: " + str(min_confidence)
+            predictions = np.array(predictions)
+        else:
+            predictions = clf.predict(x_test)
+    else:
+        predictions = clf.predict(x_test)
     precision = precision_score(y_test, predictions, [-1, 1])
     recall = recall_score(y_test, predictions, [-1, 1])
     auc_score = roc_auc_score(y_test, predictions, None)
@@ -128,7 +156,9 @@ def __print_and_log_results(clf, classifier, x_train, x_test, y_test, out_file_n
                     precision=precision, recall=recall,
                     true_count=true_count, actual_count=actual_count,
                     X_train=x_train, X_test=x_test,
-                    auc=auc_score, accuracy=accuracy)
+                    auc=auc_score, accuracy=accuracy,
+                    probablistic_prediction=probablistic_predictions,
+                    prediction_threshold=args.predict_threshold)
 
 def __get_sample_transformed_examples(sample_type, train_x, train_y, ratio):
     sampler = None
@@ -180,19 +210,38 @@ def __get_classifier_model(classifier, args):
                           n_jobs=-1, random_state=179)
     if classifier == SVM:
         model = SVC(kernel=args.kernel, class_weight="balanced", cache_size=8096,
-                    random_state=17)
+                    random_state=17, probability=True)
     elif classifier == ADA_BOOST:
-        model = AdaBoostClassifier(n_estimators=300, random_state=17)
+        dt = DecisionTreeClassifier(max_depth=15, criterion='gini',
+                                    max_features='auto', class_weight='balanced',
+                                    random_state=39)
+        model = AdaBoostClassifier(base_estimator=dt, n_estimators=400, random_state=17)
     elif classifier == RF:
         # Configure the classifier to use all available CPU cores 
         model = RandomForestClassifier(class_weight="balanced", n_jobs=-1,
-                                       n_estimators=300, random_state=17)
+                                       n_estimators=400, random_state=17,
+                                       max_features='auto', max_depth=15,
+                                       criterion='gini')
     elif classifier == GRADIENT_BOOST:
-        model = GradientBoostingClassifier(random_state=17, n_estimators=300)
+        model = GradientBoostingClassifier(random_state=17, n_estimators=400,
+                                           max_features='auto')
     elif classifier == EXTRA_TREES:
-        model = ExtraTreesClassifier(random_state=17, n_estimators=300, n_jobs=-1)
+        model = ExtraTreesClassifier(random_state=17, n_estimators=400, n_jobs=-1,
+                                     class_weight='balanced', max_depth=15,
+                                     max_features='auto', criterion='gini')
     elif classifier == BAGGING:
-        model = BaggingClassifier(n_estimators=300, random_state=17, n_jobs=-1)
+        dt = DecisionTreeClassifier(max_depth=15, criterion='gini',
+                                    max_features='auto', class_weight='balanced',
+                                    random_state=39)
+        model = BaggingClassifier(base_estimator=dt, n_estimators=400,
+                                  random_state=17, n_jobs=-1, max_features=0.8,
+                                  max_samples=0.8, bootstrap=False)
+    elif classifier == PASSIVE_AGGRESSIVE:
+        model  = PassiveAggressiveClassifier(n_iter=10, class_weight='balanced',
+                                           n_jobs=-1, random_state=41)
+    elif classifier == PERCEPTRON:
+        model = Perceptron(n_jobs=-1, n_iter=10, penalty='l2',
+                           class_weight='balanced', alpha=0.25)
     return model
 
 
@@ -226,7 +275,7 @@ def main(args):
                                                                      args.sampling_ratio)
 
         if args.scale:
-            scaler = StandardScaler()
+            scaler = RobustScaler()
             x_train = scaler.fit_transform(x_train)
             x_test = scaler.fit_transform(x_test)
         for classifier in args.classifiers:
@@ -320,10 +369,16 @@ def main(args):
                     parameters = {'n_estimators':[300], 'random_state':[17], 'n_jobs':[-1], 'criterion':('gini', 'entropy'), 'max_features':('log2', 40, 0.4), 'max_features':[40, 0.4], 'bootstrap':[True, False], 'bootstrap_features':[True, False]}
                     model = grid_search.GridSearchCV(model, parameters, scoring='roc_auc', verbose=2)
                 elif classifier == BAGGING:
-                    parameters = {'n_estimators' : [400], 'random_state' : [17],
-                                  'max_samples' : np.arange(0.5, 0.9, 0.1),
-                                  'max_features' : np.arange(0.5, 0.9, 0.1),
-                                  'bootstrap':[False], 'bootstrap_features':[False], 'n_jobs':[-1]}
+                    #parameters = {'n_estimators' : [400], 'random_state' : [17],
+                    #              'max_samples' : np.arange(0.5, 0.9, 0.1),
+                    #              'max_features' : np.arange(0.5, 0.9, 0.1),
+                    #              'bootstrap':[False], 'bootstrap_features':[False], 'n_jobs':[-1]}
+                    parameters = {"base_estimator__criterion" : ["gini", "entropy"],
+                                  "base_estimator__splitter" : ["best", "random"],
+                                  "base_estimator__max_depth" : [10, 15, 20, 25], 
+                                  "base_estimator__class_weight" : ['balanced'],
+                                  "base_estimator__max_features" : ['auto', 'log2']
+                                  }
                     model = grid_search.GridSearchCV(model, parameters, scoring='roc_auc', verbose=2)
             clf = model.fit(X_train, y_train)
             if args.grid_search:
@@ -434,5 +489,10 @@ if __name__ == '__main__':
                            action="store_true")
     argparser.add_argument("--select_best", help="Select best features",
                            action="store_true")
+    argparser.add_argument("--predict_proba", help="Select best features",
+                           action="store_true")
+    argparser.add_argument("--predict_threshold",
+                          help="The prediction threshold to use", type=float,
+                          default=0.55, required=False)
     args = argparser.parse_args()
     main(args)
